@@ -3,23 +3,14 @@
 
 import torch 
 import math
-import torch.nn as nn
+import time 
 import torch.nn.functional as F
-from typing import Optional
 
-
-def causal_mask(
-    seq_len: int, 
-    device: Optional[torch.device] = None
-): 
-    pass 
 
 def scaled_dot_product(
     q: torch.Tensor, 
     k: torch.Tensor, 
-    v: torch.Tensor, 
-    mask: Optional[torch.Tensor] = None, 
-    dropout: Optional[torch.nn.Module] = None
+    v: torch.Tensor
 ): 
     """
     q, k, v: tensors of shape (batch_size, num_heads, seq_len, head_dim)
@@ -30,16 +21,21 @@ def scaled_dot_product(
         attn_weights: (batch_size, num_heads, seq_len, seq_len)
     """
 
-    pass 
-
-class VanillaAttention():
-    pass 
+    d_k = q.size(-1)
+    scores = torch.matmul(q,k.transpose(-2,-1)) / math.sqrt(d_k)
+    attn = F.softmax(scores, dim=-1)
+    output = torch.matmul(attn, v)
+    return output, attn
 
 def warmup(): 
-    pass 
+    q_warmup = torch.randn(1, 32, 512, 64, device="cuda")
+    k_warmup = torch.randn(1, 32, 512, 64, device="cuda")
+    v_warmup = torch.randn(1, 32, 512, 64, device="cuda")
+    for _ in range(3): 
+        _ = scaled_dot_product(q_warmup, k_warmup, v_warmup)
+    torch.cuda.synchronize() 
 
-
-if __name__ == "__main__":
+def main(): 
     batch_size: int = 1
     seq_len: int = 16384 
     hidden_dim: int = 2048
@@ -47,6 +43,21 @@ if __name__ == "__main__":
     head_dim: int = 64 # 128
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    q = torch.randn(batch_size, seq_len, num_heads, head_dim, device=device)
-    k = torch.randn(batch_size, seq_len, num_heads, head_dim, device=device)
-    v = torch.randn(batch_size, seq_len, num_heads, head_dim, device=device)
+    q = torch.randn(batch_size, num_heads, seq_len, head_dim, device=device)
+    k = torch.randn(batch_size, num_heads, seq_len, head_dim, device=device)
+    v = torch.randn(batch_size, num_heads, seq_len, head_dim, device=device)
+
+    warmup()
+
+    start = time.perf_counter_ns()
+    output, attn = scaled_dot_product(q, k, v)
+    end = time.perf_counter_ns()
+    duration = (end - start) / 1e9 
+
+    gflops = 4 * batch_size * num_heads * (seq_len**2) * head_dim / duration 
+
+    print("gflops: ",gflops)
+
+if __name__ == "__main__":
+    main()
+    
