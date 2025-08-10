@@ -48,3 +48,13 @@ __device__ void initialze(
         store16b<inf>(reinterpret_cast<void*>(m + i));
     }
 } 
+
+template <int HEAD_DIM> 
+void main() {
+    constexpr int Br = Br<HEAD_DIM>();
+    constexpr int Bc = Bc<HEAD_DIM>(); 
+
+    const int Tr = (N+Br-1)/ Br; 
+    const int Tc = (N+Bc-1)/ Bc; 
+    
+}
