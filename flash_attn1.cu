@@ -19,9 +19,14 @@ template<int HEAD_DIM>
 inline constexpr int Br() { return std::min(Bc<HEAD_DIM>(), HEAD_DIM);} // block rows -> the number of rows of query vectors processed per tile iteration
 
 // 16b zero stores 
-// todo: update v8 to v4
 __device__ __forceinline__ void store16b( void* p) { 
     asm volatile("st.global.v8.u16 [%0], {0,0,0,0,0,0,0,0};" :: "l"(p) : "memory");
+}
+
+__device__ __forceinline__ void store_q(void *dest, const void* src) { 
+    uint32_t r0, r1, r2, r3; 
+    asm volatile("ld.global.v4.u32 {%0,%1,%2,%3}, [%4];"
+    : = "r"(r0)
 }
 
 template<typename T> 
@@ -47,14 +52,17 @@ __device__ void initialze(
         store16b<zero>(reinterpret_cast<void*>(l + i));
         store16b<inf>(reinterpret_cast<void*>(m + i));
     }
-} 
+}
 
-template <int HEAD_DIM> 
 void main() {
     constexpr int Br = Br<HEAD_DIM>();
     constexpr int Bc = Bc<HEAD_DIM>(); 
 
     const int Tr = (N+Br-1)/ Br; 
     const int Tc = (N+Bc-1)/ Bc; 
+
+    for (int j = 1; j < Tc; j++) { 
+        
+    }
     
 }
