@@ -4,6 +4,7 @@
 #include <cuda_fp16.h> 
 #include <stdint.h>
 #include <type_traits> 
+#include <cooperative_groups.h> 
 
 namespace cg = cooperative_groups; 
 
@@ -11,6 +12,16 @@ namespace cg = cooperative_groups;
 #define WARP_SIZE 32
 
 inline constexpr int num_elems = M / sizeof(__half); 
+
+#define CUDA_CHECK(call)                                               \
+do{                                                                    \
+    cudaError_t err = call;                                            \
+    if(err != cudaSuccess) {                                           \
+        printf("CUDA error at %s %d: %s: \n ", __FILE__, __LINE__,     \
+                cudaGetErrorString(err));                              \
+        return;                                                        \
+    }                                                                   \
+} while (0)
 
 template<int HEAD_DIM> 
 inline constexpr int Bc() {return (num_elems + 4 * HEAD_DIM - 1) / (4 * HEAD_DIM);} // block columns -> the number of key/value vectors processed per tile iteration
@@ -54,15 +65,47 @@ __device__ void initialze(
     }
 }
 
-void main() {
-    constexpr int Br = Br<HEAD_DIM>();
-    constexpr int Bc = Bc<HEAD_DIM>(); 
+template <int HEAD_DIM, int Br, int Bc> 
+__global__ void flash_attn1(
+    const __half* __restrict__ Q, 
+    const __half* __restrict__ K, 
+    const __half* __restrict__ V, 
+          __half* __restrict__ O, 
+    float*        __restrict__ l, 
+    float*        __restrict__ m, 
+    int N, 
+    float scale
+) { 
+    static_assert(HEAD_DIM % 8 == 0, "HEAD_DIM must be a multiple of 8 for vectorized loads")
+    constexpr int bc = Bc<HEAD_DIM>(); 
+    constexpr int br = Br<HEAD_DIM>(); 
+    const     int tc = (N + bc -1) / bc;
+    const     int tr = (N + br -1) / br;
 
-    const int Tr = (N+Br-1)/ Br; 
-    const int Tc = (N+Bc-1)/ Bc; 
+    const int tile_y = blockIdx.y;
+    const int tile_x = blockIdx.x; 
+    const int idx = threadIdx.x; 
+    const int lane = idx & ( WARP_SIZE - 1);
+    const int warp_id = threadIdx.x / WARP_SIZE; 
+    const int lane_id = threadIdx.x % WARP_SIZE; 
 
-    for (int j = 1; j < Tc; j++) { 
-        
+    extern __shared__ char shared[]; 
+    __half* sq = reinterpret_cast<__half*>(shared); // br * d 
+    __half* sk = reinterpret_cast<__half*>(sq + br * HEAD_DIM); // bc * d
+    __half* sv = reinterpret_cast<__half*>(sk + bc * HEAD_DIM); // bc * d 
+
+    for (int j = 0; j < tc; j++){
+
+        const int k_offset = j * bc * HEAD_DIM;
+        const int v_offset = j * bc * HEAD_DIM;
+
+        for (int i = 0; i < tr; i++) {
+            // load q, o, l , m from HBM to on-chip SRAM 
+        }
     }
+
+}
+
+void main() {
     
 }
