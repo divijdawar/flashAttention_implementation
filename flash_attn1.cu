@@ -40,6 +40,41 @@ __device__ __forceinline__ void store_q(void *dest, const void* src) {
     : = "r"(r0)
 }
 
+struct __align__(8) half4 {half w,x, y,z};
+__device__ half4 make_half4(half x, half y, half z, half z) { half r={w,x,y,z}; return r;}
+
+struct __align__(16) half8 {half x, y, z,w, a, b, c, d;};
+__device__ half8 make_half8(half x, half y, half z, half w, half a, half b, half c, half d) { half8 r={x, y, z, w, a, b, c, d}; return r; }
+
+__device__ void __ldmatrix_a(half8 *regs, half *smem){ 
+    uint32_t reg0, reg1, reg3, reg3; 
+    asm volatile(
+        "ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0, %1, %2, %3}, [%4];"
+        : "=r"(reg0), "=r"(reg1), "=r"(reg2), "=r"(reg3)
+        : "l"(__cvta_generic_to_shared(smem))
+    );
+    uint32_t *addr = reinterpret_cast<uint32_t*>(regs); 
+    addr[0] = reg0; 
+    addr[1] = reg1; 
+    addr[2] = reg2;
+    addr[3] = reg3; 
+}
+
+__device__ void __ldmatrix_b(half4 *regs_lo, half4 *regs_hi, half* smem) { 
+    uint32_t reg0, reg1, reg2, reg3; 
+    asm volatile(
+        "ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%0, %1, %2, %3}, [%4];"
+        : "=r"(reg0), "=r"(reg1), "=r"(reg2), "=r"(reg3)
+        : "l"(__cvta_generic_to_shared(smem))
+    );
+    uint32_t *addr_lo = reinterpret_cast<uint32_t*>(regs_lo);
+    uint32_t *addr_hi = reinterpret_cast<uint32_t*>(regs_hi);
+    addr_lo[0] = reg0; 
+    addr_lo[1] = reg1; 
+    addr_hi[0] = reg2; 
+    addr_hi[1] = reg3; 
+}
+
 template<typename T> 
 __device__ void initialze(
     T* __restrict__ out, 
