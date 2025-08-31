@@ -17,10 +17,10 @@ inline constexpr int num_elems = M / sizeof(__half);
 do{                                                                    \
     cudaError_t err = call;                                            \
     if(err != cudaSuccess) {                                           \
-        printf("CUDA error at %s %d: %s: \n ", __FILE__, __LINE__,     \
+        fprintf("CUDA error at %s %d: %s: \n ", __FILE__, __LINE__,     \
                 cudaGetErrorString(err));                              \
-        return;                                                        \
-    }                                                                   \
+        exit(EXIT_FAILURE)                                             \
+    }                                                                  \
 } while (0)
 
 template<int HEAD_DIM> 
@@ -36,18 +36,27 @@ __device__ __forceinline__ void store16b( void* p) {
 
 __device__ __forceinline__ void store_q(void *dest, const void* src) { 
     uint32_t r0, r1, r2, r3; 
+    // Loads 16b bytes from src 
     asm volatile("ld.global.v4.u32 {%0,%1,%2,%3}, [%4];"
-    : = "r"(r0)
+    : = "r"(r0), ="r"(r1), ="r"(r2), "r"(r3)
+    : "l"(src)
+    :"memory";
+    
+    // Stores 16 bytes to dest 
+    asm volatile("st.global.v4.u32 [%0] {%1, %2, %3, %4}";
+    : 
+    : "l"(dest), "r"(r0), "r"(r1), "r"(r2), "r", (r3)
+    : "memory"); 
 }
 
 struct __align__(8) half4 {half w,x, y,z};
-__device__ half4 make_half4(half x, half y, half z, half z) { half r={w,x,y,z}; return r;}
+__device__ half4 make_half4(half x, half y, half z, half w) { half r={w,x,y,z}; return r;}
 
 struct __align__(16) half8 {half x, y, z,w, a, b, c, d;};
 __device__ half8 make_half8(half x, half y, half z, half w, half a, half b, half c, half d) { half8 r={x, y, z, w, a, b, c, d}; return r; }
 
 __device__ void __ldmatrix_a(half8 *regs, half *smem){ 
-    uint32_t reg0, reg1, reg3, reg3; 
+    uint32_t reg0, reg1, reg2, reg3; 
     asm volatile(
         "ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%0, %1, %2, %3}, [%4];"
         : "=r"(reg0), "=r"(reg1), "=r"(reg2), "=r"(reg3)
@@ -76,7 +85,7 @@ __device__ void __ldmatrix_b(half4 *regs_lo, half4 *regs_hi, half* smem) {
 }
 
 template<typename T> 
-__device__ void initialze(
+__device__ void initialize(
     T* __restrict__ out, 
     float* __restrict__ l,   // [N]
     float* __restrict__ m,   // [N]
