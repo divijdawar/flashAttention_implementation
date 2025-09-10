@@ -3,12 +3,23 @@
 #include <cuda_runtime.h> 
 #include <cuda_fp16.h> 
 #include <stdint.h> 
-#include <cooperative_groups.h> 
+#include <cooperative_groups.h>
+#include <vector> 
 
 namespace cg = cooperative_groups; 
 
 #define WARP_SIZE 32 
 #define M // to-be defined 
+
+#define CUDA_CHECK(call) { 
+do { 
+    cudaError_t err = (call); 
+    if (err != cudaSuccess) { 
+        fprintf(stderr, "CUDA error at %s:%d: %s\n in call: %s \n",
+          __FILE__ __LINE__, cudaGetErrorString(err), #call);
+        std::abort(); 
+    }
+} while (0)
 
 inline constexpr int num_elems = M / sizeof(__half); 
 
@@ -35,7 +46,28 @@ __global__ void flash_attention1 {
     constexpr int tr = (N + br - 1) / br; // divides Q into blocks of br * d  
     constexpr int tc = (N + bc -1)  / bc; // divides k,v into blocks of bc * d 
     
-    const int num_bytes = 
+    size_t o_size = sizeof(__half) * N * HEAD_DIM; 
+    size_t l_size = sizeof(__half) * N; 
+    size_t m_size = sizeof(__half) * N; 
 
+    CUDA_CHECK(cudaStreamCreate(&stream1)); 
+    CUDA_CHECK(cudaStreamCreate(&stream2)); 
+
+    cudaMallocAsync((void**)&O, o_size, stream1); 
+    cudaMallocAsync((void**)&l, l_size, stream1); 
+    cudaMallocAsync((void**)&m, m_size, stream1); 
+
+    CUDA_CHECK(cudaMemsetAsync(O, 0, o_size, stream1)); 
+    CUDA_CHECK(cudaMemsetAsync(l, 0, l_size, stream1)); 
+    
+    std::vector<float> m_host (N, -std::numeric_limits<float>::infinity());
+    CUDA_CHECK(cudaMemsetAsync(m, m_host.data(), m_size, cudaMemcpyHostToDevice, stream1));
+
+    __shared__ float K_j [][];
+    __shared__ float V_j[][];
+
+    for (int j = 0; j < tc; j++) { 
+        
+    }
 }
 
