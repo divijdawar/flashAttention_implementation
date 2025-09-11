@@ -5,6 +5,7 @@
 #include <stdint.h> 
 #include <cooperative_groups.h>
 #include <vector> 
+#include <cuda_pipeline.h> 
 
 namespace cg = cooperative_groups; 
 
@@ -63,11 +64,19 @@ __global__ void flash_attention1 {
     std::vector<float> m_host (N, -std::numeric_limits<float>::infinity());
     CUDA_CHECK(cudaMemsetAsync(m, m_host.data(), m_size, cudaMemcpyHostToDevice, stream1));
 
-    __shared__ float K_j [][];
-    __shared__ float V_j[][];
+    __shared__ __half K_j[2][bc][HEAD_DIM];
+    __shared__ __half V_j[2][bc][HEAD_DIM];
+    __shared__ __half V_i[2][br][HEAD_DIM]; 
 
-    for (int j = 0; j < tc; j++) { 
+    for (int j = 0; j < tc; j++) {
         
+        for (int i = 0; i < tr; i++) { 
+            
+        }
     }
+}
+
+void main() { 
+    
 }
 
